@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Timed Anagram Challenge</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+      max-width: 600px;
+      margin: auto;
+    }
+    .hidden { display: none; }
+    button { margin-top: 20px; padding: 10px 20px; }
+    h1, h2 { text-align: center; }
+  </style>
+</head>
+<body>
+
+  <h1>Timed Anagram Challenge</h1>
+
+  <div id="start-screen">
+    <label for="name">Enter your name:</label>
+    <input type="text" id="name" required />
+    <br/>
+    <button onclick="startTask()">Start</button>
+  </div>
+
+  <div id="task-screen" class="hidden">
+    <h2 id="anagram-display"></h2>
+    <button onclick="submitAnswer(true)">Real Word</button>
+    <button onclick="submitAnswer(false)">Not a Word</button>
+  </div>
+
+  <div id="end-screen" class="hidden">
+    <h2>Done!</h2>
+    <button onclick="downloadPDF()">Download Results as PDF</button>
+  </div>
+
+  <script>
+    const possibleAnagrams = ["listen", "finder", "cinema", "rescue", "earth", "races", "angel", "stare"];
+    const impossibleAnagrams = ["bnrate", "freska", "glenat", "traeps", "plofer", "crand", "jiblet", "sprole", "karnel", "zudner", "vostan", "gralem"];
+    const TOTAL_TRIALS = 20;
+    const RATIO = 0.6; // 60% impossible (12), 40% possible (8)
+
+    let selectedAnagrams = [];
+    let responses = [];
+    let currentIndex = 0;
+    let startTime;
+    let taskStartTime;
+    let userName = "";
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function startTask() {
+      userName = document.getElementById("name").value.trim();
+      if (!userName) return alert("Please enter your name.");
+      taskStartTime = new Date();
+
+      const impossible = shuffle(impossibleAnagrams).slice(0, Math.floor(TOTAL_TRIALS * RATIO));
+      const possible = shuffle(possibleAnagrams).slice(0, TOTAL_TRIALS - impossible.length);
+      selectedAnagrams = shuffle([...impossible.map(w => ({ word: w, isReal: false })), ...possible.map(w => ({ word: w, isReal: true }))]);
+
+      document.getElementById("start-screen").classList.add("hidden");
+      document.getElementById("task-screen").classList.remove("hidden");
+
+      showNextAnagram();
+    }
+
+    function showNextAnagram() {
+      if (currentIndex >= selectedAnagrams.length) {
+        document.getElementById("task-screen").classList.add("hidden");
+        document.getElementById("end-screen").classList.remove("hidden");
+        return;
+      }
+
+      const anagram = selectedAnagrams[currentIndex];
+      document.getElementById("anagram-display").textContent = anagram.word;
+      startTime = new Date();
+    }
+
+    function submitAnswer(userThinksReal) {
+      const endTime = new Date();
+      const timeSpent = ((endTime - startTime) / 1000).toFixed(2);
+      const currentAnagram = selectedAnagrams[currentIndex];
+
+      responses.push({
+        word: currentAnagram.word,
+        isReal: currentAnagram.isReal,
+        userResponse: userThinksReal,
+        timeSpent: timeSpent
+      });
+
+      currentIndex++;
+      showNextAnagram();
+    }
+
+    async function downloadPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(14);
+      doc.text("Timed Anagram Challenge Results", 10, 10);
+      doc.setFontSize(12);
+      doc.text(`Name: ${userName}`, 10, 20);
+      doc.text(`Date: ${taskStartTime.toLocaleString()}`, 10, 30);
+
+      let y = 40;
+      responses.forEach((r, i) => {
+        doc.text(
+          `${i + 1}. Word: ${r.word} | Real: ${r.isReal ? "Yes" : "No"} | Response: ${r.userResponse ? "Yes" : "No"} | Time: ${r.timeSpent}s`,
+          10,
+          y
+        );
+        y += 10;
+        if (y > 270) {
+          doc.addPage();
+          y = 10;
+        }
+      });
+
+      doc.save(`anagram_results_${userName.replace(" ", "_")}.pdf`);
+    }
+  </script>
+</body>
+</html>
