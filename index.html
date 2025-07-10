@@ -2,136 +2,189 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Timed Anagram Challenge</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 30px;
-      max-width: 600px;
-      margin: auto;
-    }
-    .hidden { display: none; }
-    button { margin-top: 20px; padding: 10px 20px; }
-    h1, h2 { text-align: center; }
+    body { font-family: Arial, sans-serif; padding: 2em; max-width: 700px; margin: auto; }
+    #task, #result { display: none; margin-top: 1em; }
+    input[type="text"] { padding: 0.5em; width: 100%; font-size: 1.2em; margin-top: 0.5em; }
+    button { padding: 0.5em 1em; font-size: 1em; margin-top: 1em; }
   </style>
 </head>
 <body>
-
   <h1>Timed Anagram Challenge</h1>
 
-  <div id="start-screen">
-    <label for="name">Enter your name:</label>
-    <input type="text" id="name" required />
-    <br/>
-    <button onclick="startTask()">Start</button>
+  <div id="start">
+    <label>Your Name:<br>
+      <input type="text" id="username" placeholder="Enter your name" required />
+    </label><br>
+    <button onclick="startTask()">Start Task</button>
   </div>
 
-  <div id="task-screen" class="hidden">
-    <h2 id="anagram-display"></h2>
-    <button onclick="submitAnswer(true)">Real Word</button>
-    <button onclick="submitAnswer(false)">Not a Word</button>
+  <div id="task">
+    <p><strong>Time left:</strong> <span id="timer">3:00</span></p>
+    <p><strong>Unscramble this word:</strong></p>
+    <h2 id="scrambledWord"></h2>
+    <input type="text" id="answer" placeholder="Your answer" onkeydown="handleKey(event)" />
+    <button onclick="submitAnswer()">Submit</button>
+    <button onclick="skip()">Skip</button>
   </div>
 
-  <div id="end-screen" class="hidden">
-    <h2>Done!</h2>
-    <button onclick="downloadPDF()">Download Results as PDF</button>
+  <div id="result">
+    <h2>✅ Task Complete</h2>
+    <p><strong>Name:</strong> <span id="resultName"></span></p>
+    <p><strong>Attempts:</strong> <span id="totalAttempts"></span></p>
+    <p><strong>Correct Answers:</strong> <span id="correctCount"></span></p>
+    <p><strong>Results auto-submitted as PDF:</strong> <code>results.pdf</code></p>
   </div>
 
   <script>
-    const possibleAnagrams = ["listen", "finder", "cinema", "rescue", "earth", "races", "angel", "stare"];
-    const impossibleAnagrams = ["bnrate", "freska", "glenat", "traeps", "plofer", "crand", "jiblet", "sprole", "karnel", "zudner", "vostan", "gralem"];
-    const TOTAL_TRIALS = 20;
-    const RATIO = 0.6;
+    const anagrams = [
+      { scrambled: 'NARCO', answer: 'ACORN' },
+      { scrambled: 'TRPEO', answer: 'REPOT' },
+      { scrambled: 'SRHAD', answer: 'SHARD' },
+      { scrambled: 'GINTS', answer: 'STING' },
+      { scrambled: 'XJLMP', answer: null },
+      { scrambled: 'KZRWQ', answer: null },
+      { scrambled: 'VBMNE', answer: null },
+      { scrambled: 'JXCIU', answer: null },
+      { scrambled: 'ZMKLV', answer: null },
+      { scrambled: 'FRPQU', answer: null }
+    ];
 
-    let selectedAnagrams = [];
-    let responses = [];
+    let shuffled = [];
     let currentIndex = 0;
-    let startTime;
-    let taskStartTime;
-    let userName = "";
+    let attempts = 0;
+    let correct = 0;
+    let username = '';
+    let timer;
+    let timeLimit = 180;
+    let timeRemaining = timeLimit;
+    let wordStartTime;
+    let responseTimes = [];
 
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
       }
-      return array;
     }
 
     function startTask() {
-      userName = document.getElementById("name").value.trim();
-      if (!userName) return alert("Please enter your name.");
-      taskStartTime = new Date();
+      username = document.getElementById('username').value.trim();
+      if (!username) return alert('Please enter your name.');
 
-      const impossible = shuffle(impossibleAnagrams).slice(0, Math.floor(TOTAL_TRIALS * RATIO));
-      const possible = shuffle(possibleAnagrams).slice(0, TOTAL_TRIALS - impossible.length);
-      selectedAnagrams = shuffle([...impossible.map(w => ({ word: w, isReal: false })), ...possible.map(w => ({ word: w, isReal: true }))]);
+      document.getElementById('start').style.display = 'none';
+      document.getElementById('task').style.display = 'block';
 
-      document.getElementById("start-screen").classList.add("hidden");
-      document.getElementById("task-screen").classList.remove("hidden");
-
-      showNextAnagram();
+      shuffled = [...anagrams];
+      shuffle(shuffled);
+      nextAnagram();
+      timer = setInterval(updateTimer, 1000);
     }
 
-    function showNextAnagram() {
-      if (currentIndex >= selectedAnagrams.length) {
-        document.getElementById("task-screen").classList.add("hidden");
-        document.getElementById("end-screen").classList.remove("hidden");
+    function updateTimer() {
+      timeRemaining--;
+      const min = Math.floor(timeRemaining / 60);
+      const sec = timeRemaining % 60;
+      document.getElementById('timer').textContent = `${min}:${sec < 10 ? '0' : ''}${sec}`;
+      if (timeRemaining <= 0) endTask();
+    }
+
+    function nextAnagram() {
+      if (currentIndex >= shuffled.length) {
+        endTask();
         return;
       }
-
-      const anagram = selectedAnagrams[currentIndex];
-      document.getElementById("anagram-display").textContent = anagram.word;
-      startTime = new Date();
+      document.getElementById('answer').value = '';
+      document.getElementById('scrambledWord').textContent = shuffled[currentIndex].scrambled;
+      wordStartTime = Date.now();
     }
 
-    function submitAnswer(userThinksReal) {
-      const endTime = new Date();
-      const timeSpent = ((endTime - startTime) / 1000).toFixed(2);
-      const currentAnagram = selectedAnagrams[currentIndex];
+    function handleKey(e) {
+      if (e.key === 'Enter') submitAnswer();
+    }
 
-      responses.push({
-        word: currentAnagram.word,
-        isReal: currentAnagram.isReal,
-        userResponse: userThinksReal,
-        timeSpent: timeSpent
+    function submitAnswer() {
+      const inputEl = document.getElementById('answer');
+      const userInput = inputEl.value.trim().toUpperCase();
+      if (userInput === '') return;
+
+      const current = shuffled[currentIndex];
+      const timeSpent = ((Date.now() - wordStartTime) / 1000).toFixed(2);
+      responseTimes.push({
+        scrambled: current.scrambled,
+        userAnswer: userInput,
+        correctAnswer: current.answer,
+        isCorrect: current.answer && userInput === current.answer.toUpperCase(),
+        isImpossible: current.answer === null,
+        timeSpent
       });
+
+      attempts++;
+      if (current.answer && userInput === current.answer.toUpperCase()) correct++;
 
       currentIndex++;
-      showNextAnagram();
+      nextAnagram();
     }
 
-    function downloadPDF() {
-      if (!window.jspdf || !window.jspdf.jsPDF) {
-        console.error("jsPDF library not loaded.");
-        alert("Failed to generate PDF: jsPDF not loaded.");
-        return;
-      }
+    function skip() {
+      const current = shuffled[currentIndex];
+      const timeSpent = ((Date.now() - wordStartTime) / 1000).toFixed(2);
+      responseTimes.push({
+        scrambled: current.scrambled,
+        userAnswer: '(skipped)',
+        correctAnswer: current.answer,
+        isCorrect: false,
+        isImpossible: current.answer === null,
+        timeSpent
+      });
+      attempts++;
+      currentIndex++;
+      nextAnagram();
+    }
 
-      const doc = new window.jspdf.jsPDF();
+    function endTask() {
+      clearInterval(timer);
+      document.getElementById('task').style.display = 'none';
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('resultName').textContent = username;
+      document.getElementById('correctCount').textContent = correct;
+      document.getElementById('totalAttempts').textContent = attempts;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
       doc.setFontSize(14);
-      doc.text("Timed Anagram Challenge Results", 10, 10);
+      doc.text("Timed Anagram Challenge Results", 20, 20);
       doc.setFontSize(12);
-      doc.text(`Name: ${userName}`, 10, 20);
-      doc.text(`Date: ${taskStartTime.toLocaleString()}`, 10, 30);
+      doc.text(`Name: ${username}`, 20, 30);
+      doc.text(`Correct Answers: ${correct}`, 20, 38);
+      doc.text(`Total Attempts: ${attempts}`, 20, 46);
 
-      let y = 40;
-      responses.forEach((r, i) => {
-        doc.text(
-          `${i + 1}. Word: ${r.word} | Real: ${r.isReal ? "Yes" : "No"} | Response: ${r.userResponse ? "Yes" : "No"} | Time: ${r.timeSpent}s`,
-          10,
-          y
-        );
-        y += 10;
-        if (y > 270) {
+      let y = 60;
+      doc.setFontSize(10);
+      doc.text("Scrambled", 20, y);
+      doc.text("Answer", 55, y);
+      doc.text("Correct", 90, y);
+      doc.text("Impossible", 115, y);
+      doc.text("Time (s)", 145, y);
+      y += 6;
+
+      responseTimes.forEach(r => {
+        if (y > 280) {
           doc.addPage();
-          y = 10;
+          y = 20;
         }
+        doc.text(r.scrambled, 20, y);
+        doc.text(r.userAnswer, 55, y);
+        doc.text(String(r.isCorrect), 90, y);
+        doc.text(String(r.isImpossible), 115, y);
+        doc.text(r.timeSpent + 's', 145, y);
+        y += 6;
       });
 
-      doc.save(`anagram_results_${userName.replace(" ", "_")}.pdf`);
+      doc.save("results.pdf");
     }
   </script>
 </body>
