@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Timed Anagram Challenge</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -43,7 +43,7 @@
     const possibleAnagrams = ["listen", "finder", "cinema", "rescue", "earth", "races", "angel", "stare"];
     const impossibleAnagrams = ["bnrate", "freska", "glenat", "traeps", "plofer", "crand", "jiblet", "sprole", "karnel", "zudner", "vostan", "gralem"];
     const TOTAL_TRIALS = 20;
-    const RATIO = 0.6; // 60% impossible (12), 40% possible (8)
+    const RATIO = 0.6;
 
     let selectedAnagrams = [];
     let responses = [];
@@ -103,10 +103,14 @@
       showNextAnagram();
     }
 
-    async function downloadPDF() {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+    function downloadPDF() {
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        console.error("jsPDF library not loaded.");
+        alert("Failed to generate PDF: jsPDF not loaded.");
+        return;
+      }
 
+      const doc = new window.jspdf.jsPDF();
       doc.setFontSize(14);
       doc.text("Timed Anagram Challenge Results", 10, 10);
       doc.setFontSize(12);
